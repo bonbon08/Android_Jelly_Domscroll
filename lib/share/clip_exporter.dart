@@ -19,8 +19,9 @@ class ExportResult {
   const ExportResult(this.message, {this.savedFolder});
 }
 
-/// Cuts the reel's clip window out of the Jellyfin stream as a vertical
-/// (9:16) H.264/AAC MP4, so it plays everywhere it gets shared to.
+/// Cuts the reel's clip window out of the Jellyfin stream as an
+/// H.264/AAC MP4 (original aspect, max 720p), so it plays everywhere it
+/// gets shared to.
 /// Android hands the file to the system share sheet; Linux has no file
 /// share sheet, so the clip is saved to the user's Videos folder instead.
 class ClipExporter {
@@ -82,7 +83,7 @@ class ClipExporter {
       '-map',
       '0:a:0?',
       '-vf',
-      "crop=w='min(iw,trunc(ih*9/32)*2)':h=ih,scale=w=-2:h='min(1280,ih)'",
+      "scale=w=-2:h='min(720,ih)'",
       '-c:v',
       'libx264',
       '-preset',

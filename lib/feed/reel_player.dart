@@ -10,8 +10,8 @@ import '../jellyfin/jellyfin_models.dart';
 import '../share/clip_exporter.dart';
 import 'feed_controller.dart';
 
-/// Plays one clip of a [ReelEntry] on repeat, Shorts-style: center-cropped
-/// to 9:16 with actions on the right. The start offset is handed to mpv via
+/// Plays one clip of a [ReelEntry] on repeat, uncropped, with Shorts-style
+/// actions on the right. The start offset is handed to mpv via
 /// [Media.start] (seeking right after `open()` races metadata loading and
 /// snaps back to 0); the loop back to the clip start is driven by the
 /// position stream because mpv's own loop restarts at 0.
@@ -158,27 +158,7 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Portrait phones fill the screen like Shorts; wider windows
-          // (desktop, landscape) get a centered 9:16 frame.
-          const shortsRatio = 9 / 16;
-          final h = constraints.maxHeight;
-          final w = constraints.maxWidth / h <= shortsRatio
-              ? constraints.maxWidth
-              : h * shortsRatio;
-          return Center(
-            child: SizedBox(
-              width: w,
-              height: h,
-              child: ClipRect(child: _buildFrame()),
-            ),
-          );
-        },
-      ),
-    );
+    return ColoredBox(color: Colors.black, child: _buildFrame());
   }
 
   Widget _buildFrame() {
@@ -192,7 +172,7 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
           if (_controller != null && _ready)
             Video(
               controller: _controller!,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               controls: NoVideoControls,
             )
           else
