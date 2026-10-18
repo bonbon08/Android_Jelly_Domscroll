@@ -27,10 +27,8 @@ class FeedController extends ChangeNotifier {
   final JellyfinSession session;
   final Random _random = Random();
 
-  /// Every clip is pinned to roughly one minute; a few seconds of jitter
-  /// keeps consecutive clips from feeling mechanically identical.
-  static const Duration minClip = Duration(seconds: 55);
-  static const Duration maxClip = Duration(seconds: 65);
+  static const Duration minClip = Duration(seconds: 20);
+  static const Duration maxClip = Duration(seconds: 60);
   static const int _refillThreshold = 8;
   static const int _fetchLimit = 60;
 
