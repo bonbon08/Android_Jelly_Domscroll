@@ -65,8 +65,12 @@ class JellyfinClient {
       throw JellyfinAuthException('Benutzername oder Passwort falsch.');
     }
     if (response.statusCode != 200) {
+      final bodySnippet = response.body.trim();
+      final detail = bodySnippet.isNotEmpty
+          ? '\n${bodySnippet.substring(0, bodySnippet.length > 300 ? 300 : bodySnippet.length)}'
+          : '';
       throw JellyfinAuthException(
-          'Login fehlgeschlagen (HTTP ${response.statusCode}).');
+          'Login fehlgeschlagen (HTTP ${response.statusCode}).$detail');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;

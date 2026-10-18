@@ -16,9 +16,17 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  // How far (as a fraction of the screen height) a swipe needs to travel
+  // before it counts as "next/previous reel". Kept low on purpose: the
+  // default PageView threshold (~50%) felt like it needed way too much
+  // scrolling before anything happened.
+  static const double _dragFraction = 0.12;
+  static const double _flingVelocity = 250;
+
   late final FeedController _feed;
   final PageController _pageController = PageController();
   int _currentIndex = 0;
+  double _dragAccum = 0;
 
   @override
   void initState() {
@@ -32,16 +40,29 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() {});
   }
 
-  void _advance() {
-    if (!mounted) return;
-    final next = _currentIndex + 1;
-    if (next < _feed.queue.length) {
-      _pageController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOut,
-      );
+  void _goToPage(int target) {
+    final clamped = target.clamp(0, _feed.queue.length - 1);
+    if (clamped == _currentIndex) return;
+    _pageController.animateToPage(
+      clamped,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onVerticalDragUpdate(DragUpdateDetails details) {
+    _dragAccum += details.delta.dy;
+  }
+
+  void _onVerticalDragEnd(DragEndDetails details) {
+    final threshold = MediaQuery.of(context).size.height * _dragFraction;
+    final velocity = details.primaryVelocity ?? 0;
+    if (_dragAccum <= -threshold || velocity <= -_flingVelocity) {
+      _goToPage(_currentIndex + 1);
+    } else if (_dragAccum >= threshold || velocity >= _flingVelocity) {
+      _goToPage(_currentIndex - 1);
     }
+    _dragAccum = 0;
   }
 
   void _onPageChanged(int index) {
@@ -87,19 +108,25 @@ class _FeedScreenState extends State<FeedScreen> {
                     : const CircularProgressIndicator(color: Colors.white54),
               )
             else
-              PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                itemCount: queue.length,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) {
-                  return ReelPlayerView(
-                    session: widget.session,
-                    entry: queue[index],
-                    isActive: index == _currentIndex,
-                    onClipFinished: _advance,
-                  );
-                },
+              GestureDetector(
+                onVerticalDragUpdate: _onVerticalDragUpdate,
+                onVerticalDragEnd: _onVerticalDragEnd,
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  // Swipe handling is done manually above with a much lower
+                  // threshold; PageView itself only reacts to animateToPage.
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: queue.length,
+                  onPageChanged: _onPageChanged,
+                  itemBuilder: (context, index) {
+                    return ReelPlayerView(
+                      session: widget.session,
+                      entry: queue[index],
+                      isActive: index == _currentIndex,
+                    );
+                  },
+                ),
               ),
             Positioned(
               top: 8,

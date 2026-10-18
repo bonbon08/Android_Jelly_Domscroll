@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -8,23 +6,22 @@ import '../jellyfin/jellyfin_client.dart';
 import '../jellyfin/jellyfin_models.dart';
 import 'feed_controller.dart';
 
-/// Plays a single clip of a [ReelEntry]: opens the stream at the chosen
-/// random offset, plays for the chosen clip duration, then calls
-/// [onClipFinished] so the feed can advance. Only [isActive] players
-/// actually decode video; inactive ones stay paused/disposed-lazily to
-/// save battery and bandwidth.
+/// Plays a single clip of a [ReelEntry]. The clip window (start/end offset)
+/// is handed to mpv directly via [Media.start]/[Media.end] so it is applied
+/// before the first frame decodes — seeking manually after `open()` races
+/// against metadata still loading and tends to snap back to position 0.
+/// `PlaylistMode.single` then makes mpv loop that same window forever, so
+/// the ~1 minute clip repeats until the viewer swipes to the next reel.
 class ReelPlayerView extends StatefulWidget {
   final JellyfinSession session;
   final ReelEntry entry;
   final bool isActive;
-  final VoidCallback onClipFinished;
 
   const ReelPlayerView({
     super.key,
     required this.session,
     required this.entry,
     required this.isActive,
-    required this.onClipFinished,
   });
 
   @override
@@ -34,7 +31,6 @@ class ReelPlayerView extends StatefulWidget {
 class _ReelPlayerViewState extends State<ReelPlayerView> {
   Player? _player;
   VideoController? _controller;
-  Timer? _clipTimer;
   bool _ready = false;
 
   @override
@@ -66,24 +62,23 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
       _ready = false;
     });
 
-    await player.open(Media(uri.toString()), play: false);
-    await player.seek(widget.entry.clipStart);
-    await player.play();
+    await player.setPlaylistMode(PlaylistMode.single);
+    await player.open(
+      Media(
+        uri.toString(),
+        start: widget.entry.clipStart,
+        end: widget.entry.clipStart + widget.entry.clipDuration,
+      ),
+      play: true,
+    );
     if (!mounted) {
       player.dispose();
       return;
     }
     setState(() => _ready = true);
-
-    _clipTimer?.cancel();
-    _clipTimer = Timer(widget.entry.clipDuration, () {
-      if (mounted) widget.onClipFinished();
-    });
   }
 
   void _teardownPlayer() {
-    _clipTimer?.cancel();
-    _clipTimer = null;
     _player?.dispose();
     _player = null;
     _controller = null;
@@ -95,15 +90,8 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
     if (player == null) return;
     if (player.state.playing) {
       player.pause();
-      _clipTimer?.cancel();
     } else {
       player.play();
-      final remaining = widget.entry.clipDuration - player.state.position;
-      if (remaining > Duration.zero) {
-        _clipTimer = Timer(remaining, () {
-          if (mounted) widget.onClipFinished();
-        });
-      }
     }
     setState(() {});
   }
