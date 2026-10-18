@@ -81,8 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: Icon(Icons.dns),
                     ),
                     keyboardType: TextInputType.url,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Server-Adresse eingeben' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Server-Adresse eingeben'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -91,8 +92,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       labelText: 'Benutzername',
                       prefixIcon: Icon(Icons.person),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Benutzername eingeben' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Benutzername eingeben'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -110,7 +112,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Text(
                         _error!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),

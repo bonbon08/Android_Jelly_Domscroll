@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
@@ -31,10 +32,10 @@ class JellyfinClient {
   }
 
   static Map<String, String> _authHeader() => {
-        'X-Emby-Authorization':
-            'MediaBrowser Client="$_clientName", Device="$_deviceName", '
-                'DeviceId="$_deviceId", Version="$_clientVersion"',
-      };
+    'X-Emby-Authorization':
+        'MediaBrowser Client="$_clientName", Device="$_deviceName", '
+        'DeviceId="$_deviceId", Version="$_clientVersion"',
+  };
 
   /// Logs in against [serverUrlInput] and returns a session on success.
   static Future<JellyfinSession> login({
@@ -50,10 +51,7 @@ class JellyfinClient {
       response = await http
           .post(
             uri,
-            headers: {
-              ..._authHeader(),
-              'Content-Type': 'application/json',
-            },
+            headers: {..._authHeader(), 'Content-Type': 'application/json'},
             body: jsonEncode({'Username': username, 'Pw': password}),
           )
           .timeout(const Duration(seconds: 15));
@@ -70,7 +68,8 @@ class JellyfinClient {
           ? '\n${bodySnippet.substring(0, bodySnippet.length > 300 ? 300 : bodySnippet.length)}'
           : '';
       throw JellyfinAuthException(
-          'Login fehlgeschlagen (HTTP ${response.statusCode}).$detail');
+        'Login fehlgeschlagen (HTTP ${response.statusCode}).$detail',
+      );
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -81,7 +80,10 @@ class JellyfinClient {
     }
 
     return JellyfinSession(
-        serverUrl: serverUrl, accessToken: token, userId: userId);
+      serverUrl: serverUrl,
+      accessToken: token,
+      userId: userId,
+    );
   }
 
   /// Validates that a stored session's token is still valid.
@@ -103,22 +105,25 @@ class JellyfinClient {
     int limit = 60,
   }) async {
     final uri = Uri.parse('${session.serverUrl}/Users/${session.userId}/Items')
-        .replace(queryParameters: {
-      'IncludeItemTypes': 'Movie,Episode',
-      'Recursive': 'true',
-      'Filters': 'IsUnplayed',
-      'IsVirtualItem': 'false',
-      'SortBy': 'Random',
-      'Fields': 'MediaSources,RunTimeTicks,SeriesName,SeriesId',
-      'Limit': '$limit',
-    });
+        .replace(
+          queryParameters: {
+            'IncludeItemTypes': 'Movie,Episode',
+            'Recursive': 'true',
+            'Filters': 'IsUnplayed',
+            'IsVirtualItem': 'false',
+            'SortBy': 'Random',
+            'Fields': 'MediaSources,RunTimeTicks,SeriesName,SeriesId',
+            'Limit': '$limit',
+          },
+        );
 
     final response = await http
         .get(uri, headers: session.authHeaders)
         .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw JellyfinAuthException(
-          'Konnte Inhalte nicht laden (HTTP ${response.statusCode}).');
+        'Konnte Inhalte nicht laden (HTTP ${response.statusCode}).',
+      );
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -133,11 +138,12 @@ class JellyfinClient {
   /// Direct-play stream URL. The underlying server supports HTTP range
   /// requests on this endpoint, so the player can seek freely within it.
   static Uri streamUrl(JellyfinSession session, JellyfinItem item) {
-    return Uri.parse('${session.serverUrl}/Videos/${item.id}/stream')
-        .replace(queryParameters: {
-      'Static': 'true',
-      if (item.mediaSourceId != null) 'MediaSourceId': item.mediaSourceId,
-      'api_key': session.accessToken,
-    });
+    return Uri.parse('${session.serverUrl}/Videos/${item.id}/stream').replace(
+      queryParameters: {
+        'Static': 'true',
+        if (item.mediaSourceId != null) 'MediaSourceId': item.mediaSourceId,
+        'api_key': session.accessToken,
+      },
+    );
   }
 }

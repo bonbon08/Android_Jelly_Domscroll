@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import '../jellyfin/jellyfin_client.dart';
@@ -67,7 +68,10 @@ class FeedController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final items = await JellyfinClient.fetchUnwatched(session, limit: _fetchLimit);
+      final items = await JellyfinClient.fetchUnwatched(
+        session,
+        limit: _fetchLimit,
+      );
       items.shuffle(_random);
       _pool.addAll(items);
       if (items.isEmpty && _pool.isEmpty) {
@@ -104,7 +108,8 @@ class FeedController extends ChangeNotifier {
   ReelEntry _buildEntry(JellyfinItem item) {
     final total = item.runtime;
     final clipLen = Duration(
-      seconds: minClip.inSeconds +
+      seconds:
+          minClip.inSeconds +
           _random.nextInt(maxClip.inSeconds - minClip.inSeconds + 1),
     );
     final effectiveClip = clipLen > total ? total : clipLen;

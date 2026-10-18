@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../jellyfin/jellyfin_models.dart';
 import '../jellyfin/session_store.dart';
@@ -9,7 +11,11 @@ class FeedScreen extends StatefulWidget {
   final JellyfinSession session;
   final VoidCallback onLoggedOut;
 
-  const FeedScreen({super.key, required this.session, required this.onLoggedOut});
+  const FeedScreen({
+    super.key,
+    required this.session,
+    required this.onLoggedOut,
+  });
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -27,6 +33,7 @@ class _FeedScreenState extends State<FeedScreen> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   double _dragAccum = 0;
+  DateTime _lastWheelJump = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -63,6 +70,33 @@ class _FeedScreenState extends State<FeedScreen> {
       _goToPage(_currentIndex - 1);
     }
     _dragAccum = 0;
+  }
+
+  // A single wheel notch (or a touchpad swipe, which fires many events)
+  // should move exactly one reel, so further events are ignored briefly.
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final now = DateTime.now();
+    if (now.difference(_lastWheelJump) < const Duration(milliseconds: 450)) {
+      return;
+    }
+    final dy = event.scrollDelta.dy;
+    if (dy.abs() < 1) return;
+    _lastWheelJump = now;
+    _goToPage(_currentIndex + (dy > 0 ? 1 : -1));
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _goToPage(_currentIndex + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _goToPage(_currentIndex - 1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _onPageChanged(int index) {
@@ -108,24 +142,31 @@ class _FeedScreenState extends State<FeedScreen> {
                     : const CircularProgressIndicator(color: Colors.white54),
               )
             else
-              GestureDetector(
-                onVerticalDragUpdate: _onVerticalDragUpdate,
-                onVerticalDragEnd: _onVerticalDragEnd,
-                child: PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  // Swipe handling is done manually above with a much lower
-                  // threshold; PageView itself only reacts to animateToPage.
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: queue.length,
-                  onPageChanged: _onPageChanged,
-                  itemBuilder: (context, index) {
-                    return ReelPlayerView(
-                      session: widget.session,
-                      entry: queue[index],
-                      isActive: index == _currentIndex,
-                    );
-                  },
+              Focus(
+                autofocus: true,
+                onKeyEvent: _onKey,
+                child: Listener(
+                  onPointerSignal: _onPointerSignal,
+                  child: GestureDetector(
+                    onVerticalDragUpdate: _onVerticalDragUpdate,
+                    onVerticalDragEnd: _onVerticalDragEnd,
+                    child: PageView.builder(
+                      controller: _pageController,
+                      scrollDirection: Axis.vertical,
+                      // Swipe handling is done manually above with a much lower
+                      // threshold; PageView itself only reacts to animateToPage.
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: queue.length,
+                      onPageChanged: _onPageChanged,
+                      itemBuilder: (context, index) {
+                        return ReelPlayerView(
+                          session: widget.session,
+                          entry: queue[index],
+                          isActive: index == _currentIndex,
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             Positioned(

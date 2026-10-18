@@ -73,9 +73,7 @@ class _RootGateState extends State<_RootGate> {
   @override
   Widget build(BuildContext context) {
     if (_checking) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_session == null) {
       return LoginScreen(onLoggedIn: _onLoggedIn);

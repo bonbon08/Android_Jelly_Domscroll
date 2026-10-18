@@ -9,9 +9,7 @@ class JellyfinSession {
     required this.userId,
   });
 
-  Map<String, String> get authHeaders => {
-        'X-Emby-Token': accessToken,
-      };
+  Map<String, String> get authHeaders => {'X-Emby-Token': accessToken};
 }
 
 class JellyfinItem {
@@ -43,9 +41,15 @@ class JellyfinItem {
 
   String get displayTitle {
     if (type == 'Episode') {
-      final season = parentIndexNumber != null ? 'S${parentIndexNumber!.toString().padLeft(2, '0')}' : '';
-      final episode = indexNumber != null ? 'E${indexNumber!.toString().padLeft(2, '0')}' : '';
-      final tag = (season.isNotEmpty || episode.isNotEmpty) ? ' $season$episode' : '';
+      final season = parentIndexNumber != null
+          ? 'S${parentIndexNumber!.toString().padLeft(2, '0')}'
+          : '';
+      final episode = indexNumber != null
+          ? 'E${indexNumber!.toString().padLeft(2, '0')}'
+          : '';
+      final tag = (season.isNotEmpty || episode.isNotEmpty)
+          ? ' $season$episode'
+          : '';
       return '${seriesName ?? name}$tag';
     }
     return name;
