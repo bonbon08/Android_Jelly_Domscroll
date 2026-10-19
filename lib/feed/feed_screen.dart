@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../jellyfin/jellyfin_models.dart';
 import '../jellyfin/session_store.dart';
+import 'clip_player.dart';
 import 'feed_controller.dart';
 import 'reel_player.dart';
 
@@ -30,6 +31,7 @@ class _FeedScreenState extends State<FeedScreen> {
   static const double _flingVelocity = 250;
 
   late final FeedController _feed;
+  late final ClipPlayer _clipPlayer;
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   double _dragAccum = 0;
@@ -38,13 +40,19 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _clipPlayer = ClipPlayer(widget.session);
     _feed = FeedController(widget.session);
     _feed.addListener(_onFeedChanged);
     _feed.start();
   }
 
   void _onFeedChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final queue = _feed.queue;
+    if (_currentIndex < queue.length) {
+      _clipPlayer.play(queue[_currentIndex]);
+    }
+    setState(() {});
   }
 
   void _goToPage(int target) {
@@ -101,6 +109,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _onPageChanged(int index) {
     setState(() => _currentIndex = index);
+    _clipPlayer.play(_feed.queue[index]);
     _feed.ensureAhead(index);
   }
 
@@ -113,6 +122,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void dispose() {
     _feed.removeListener(_onFeedChanged);
     _feed.dispose();
+    _clipPlayer.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -163,6 +173,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           session: widget.session,
                           entry: queue[index],
                           isActive: index == _currentIndex,
+                          clipPlayer: _clipPlayer,
                         );
                       },
                     ),
