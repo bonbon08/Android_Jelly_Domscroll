@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../jellyfin/jellyfin_models.dart';
@@ -8,8 +9,8 @@ import '../share/clip_exporter.dart';
 import 'clip_player.dart';
 import 'feed_controller.dart';
 
-/// One page of the feed. Only the active page shows the shared
-/// [ClipPlayer]'s video; the others are just a black frame with the title.
+/// One page of the feed, showing the [ClipPlayer] pool's video for its
+/// entry once buffered; only the active page plays and shows progress.
 class ReelPlayerView extends StatefulWidget {
   final ReelEntry entry;
   final bool isActive;
@@ -71,15 +72,17 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
       child: ListenableBuilder(
         listenable: clip,
         builder: (context, _) {
-          final ready = widget.isActive && clip.isReadyFor(widget.entry);
+          final ready = widget.isActive && clip.isActiveReady(widget.entry);
+          final video = clip.videoFor(widget.entry);
+          final doubleSpeed = clip.rate != 1.0;
           return GestureDetector(
             onTap: ready ? clip.togglePause : null,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (ready)
+                if (video != null)
                   Video(
-                    controller: clip.video,
+                    controller: video,
                     fit: BoxFit.contain,
                     controls: NoVideoControls,
                   )
@@ -115,11 +118,24 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
                 Positioned(
                   right: 8,
                   bottom: 96,
-                  child: _ActionButton(
-                    icon: Icons.share,
-                    label: 'Teilen',
-                    busy: _exporting,
-                    onPressed: _exporting ? null : _share,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ActionButton(
+                        icon: Icons.speed,
+                        label: doubleSpeed ? '2×' : '1×',
+                        busy: false,
+                        highlighted: doubleSpeed,
+                        onPressed: clip.toggleDoubleSpeed,
+                      ),
+                      const SizedBox(height: 16),
+                      _ActionButton(
+                        icon: Icons.share,
+                        label: 'Teilen',
+                        busy: _exporting,
+                        onPressed: _exporting ? null : _share,
+                      ),
+                    ],
                   ),
                 ),
                 Positioned(
@@ -133,7 +149,10 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    child: _ClipProgress(clip: clip, entry: widget.entry),
+                    child: _ClipProgress(
+                      player: clip.activePlayer!,
+                      entry: widget.entry,
+                    ),
                   ),
               ],
             ),
@@ -145,15 +164,15 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
 }
 
 class _ClipProgress extends StatelessWidget {
-  final ClipPlayer clip;
+  final Player player;
   final ReelEntry entry;
 
-  const _ClipProgress({required this.clip, required this.entry});
+  const _ClipProgress({required this.player, required this.entry});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Duration>(
-      stream: clip.player.stream.position,
+      stream: player.stream.position,
       builder: (context, snapshot) {
         final pos = snapshot.data ?? entry.clipStart;
         final elapsed = pos - entry.clipStart;
@@ -176,6 +195,7 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool busy;
+  final bool highlighted;
   final VoidCallback? onPressed;
 
   const _ActionButton({
@@ -183,6 +203,7 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.busy,
     required this.onPressed,
+    this.highlighted = false,
   });
 
   @override
@@ -191,7 +212,9 @@ class _ActionButton extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Material(
-          color: Colors.black38,
+          color: highlighted
+              ? Theme.of(context).colorScheme.primary
+              : Colors.black38,
           shape: const CircleBorder(),
           child: IconButton(
             iconSize: 28,

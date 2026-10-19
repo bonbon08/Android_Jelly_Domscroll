@@ -52,10 +52,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _onFeedChanged() {
     if (!mounted) return;
-    final queue = _feed.queue;
-    if (_currentIndex < queue.length) {
-      _clipPlayer.play(queue[_currentIndex]);
-    }
+    _clipPlayer.update(_feed.queue, _currentIndex);
     setState(() {});
   }
 
@@ -113,12 +110,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _onPageChanged(int index) {
     setState(() => _currentIndex = index);
-    _clipPlayer.play(_feed.queue[index]);
+    _clipPlayer.update(_feed.queue, index);
     _feed.ensureAhead(index);
   }
 
   Future<void> _logout() async {
-    _clipPlayer.player.stop();
+    _clipPlayer.stopAll();
     await JellyfinClient.logout(widget.session);
     await SessionStore.clear();
     widget.onLoggedOut();
