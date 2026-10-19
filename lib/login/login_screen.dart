@@ -23,6 +23,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (JellyfinClient.isInsecureRemote(_serverController.text) &&
+        !await _confirmInsecure()) {
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -41,6 +46,32 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<bool> _confirmInsecure() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unverschlüsselte Verbindung'),
+        content: const Text(
+          'Dieser Server ist nicht im lokalen Netz und wird per http:// '
+          'angesprochen. Passwort und Zugangs-Token würden unverschlüsselt '
+          'über das Internet übertragen und können mitgelesen werden.\n\n'
+          'Nutze nach Möglichkeit https://.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Trotzdem verbinden'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   @override

@@ -4,8 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../jellyfin/jellyfin_client.dart';
-import '../jellyfin/jellyfin_models.dart';
+import '../jellyfin/stream_proxy.dart';
 import 'feed_controller.dart';
 
 /// The one player shared by the whole feed. Switching reels only opens new
@@ -14,7 +13,7 @@ import 'feed_controller.dart';
 /// using it, which on Linux could leave the window showing a frozen picture
 /// while audio kept playing.
 class ClipPlayer extends ChangeNotifier {
-  final JellyfinSession session;
+  final Future<StreamProxy> proxy;
   final Player player = Player();
   late final VideoController video = VideoController(player);
 
@@ -26,7 +25,7 @@ class ClipPlayer extends ChangeNotifier {
   late final StreamSubscription<bool> _completedSub;
   late final StreamSubscription<bool> _playingSub;
 
-  ClipPlayer(this.session) {
+  ClipPlayer(this.proxy) {
     // mpv's own looping restarts at 0, not at the clip start, so the loop
     // is driven from here.
     _positionSub = player.stream.position.listen((pos) {
@@ -53,7 +52,8 @@ class ClipPlayer extends ChangeNotifier {
     _readyEntry = null;
     notifyListeners();
 
-    final uri = JellyfinClient.streamUrl(session, entry.item);
+    final uri = (await proxy).streamUrl(entry.item);
+    if (gen != _generation) return;
     // The start offset goes to mpv as a file option: seeking right after
     // open() races metadata loading and snaps back to 0.
     await player.open(

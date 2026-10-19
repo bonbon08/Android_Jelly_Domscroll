@@ -2,8 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../jellyfin/jellyfin_client.dart';
 import '../jellyfin/jellyfin_models.dart';
 import '../jellyfin/session_store.dart';
+import '../jellyfin/stream_proxy.dart';
 import 'clip_player.dart';
 import 'feed_controller.dart';
 import 'reel_player.dart';
@@ -31,6 +33,7 @@ class _FeedScreenState extends State<FeedScreen> {
   static const double _flingVelocity = 250;
 
   late final FeedController _feed;
+  late final Future<StreamProxy> _proxy;
   late final ClipPlayer _clipPlayer;
   final PageController _pageController = PageController();
   int _currentIndex = 0;
@@ -40,7 +43,8 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _clipPlayer = ClipPlayer(widget.session);
+    _proxy = StreamProxy.start(widget.session);
+    _clipPlayer = ClipPlayer(_proxy);
     _feed = FeedController(widget.session);
     _feed.addListener(_onFeedChanged);
     _feed.start();
@@ -114,6 +118,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _logout() async {
+    _clipPlayer.player.stop();
+    await JellyfinClient.logout(widget.session);
     await SessionStore.clear();
     widget.onLoggedOut();
   }
@@ -123,6 +129,7 @@ class _FeedScreenState extends State<FeedScreen> {
     _feed.removeListener(_onFeedChanged);
     _feed.dispose();
     _clipPlayer.dispose();
+    _proxy.then((p) => p.close());
     _pageController.dispose();
     super.dispose();
   }
@@ -170,7 +177,6 @@ class _FeedScreenState extends State<FeedScreen> {
                       onPageChanged: _onPageChanged,
                       itemBuilder: (context, index) {
                         return ReelPlayerView(
-                          session: widget.session,
                           entry: queue[index],
                           isActive: index == _currentIndex,
                           clipPlayer: _clipPlayer,

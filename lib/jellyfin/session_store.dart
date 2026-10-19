@@ -23,6 +23,18 @@ class SessionStore {
     return JellyfinSession(serverUrl: server, accessToken: token, userId: user);
   }
 
+  static const _keyDevice = 'jf_device_id';
+
+  /// Returns the persisted device id, creating it with [create] on first use.
+  /// Kept across logouts so the server keeps recognising this device.
+  static Future<String> deviceId(String Function() create) async {
+    final existing = await _storage.read(key: _keyDevice);
+    if (existing != null) return existing;
+    final id = create();
+    await _storage.write(key: _keyDevice, value: id);
+    return id;
+  }
+
   static Future<void> clear() async {
     await _storage.delete(key: _keyServer);
     await _storage.delete(key: _keyToken);

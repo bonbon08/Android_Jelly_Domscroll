@@ -1,3 +1,14 @@
+import java.util.Properties
+
+// Release signing key lives outside the (cloud-synced) project folder.
+val keyPropsFile = file(
+    System.getenv("JELLYREELS_KEY_PROPERTIES")
+        ?: "${System.getProperty("user.home")}/.config/jellyreels/key.properties"
+)
+val keyProps = Properties().apply {
+    if (keyPropsFile.exists()) keyPropsFile.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -30,11 +41,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keyPropsFile.exists()) {
+            create("release") {
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keyPropsFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("No release key at $keyPropsFile - signing release with the DEBUG key.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

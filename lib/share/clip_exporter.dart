@@ -6,8 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../feed/feed_controller.dart';
-import '../jellyfin/jellyfin_client.dart';
-import '../jellyfin/jellyfin_models.dart';
+import '../jellyfin/stream_proxy.dart';
 
 class ExportResult {
   final String message;
@@ -25,10 +24,7 @@ class ExportResult {
 /// Android hands the file to the system share sheet; Linux has no file
 /// share sheet, so the clip is saved to the user's Videos folder instead.
 class ClipExporter {
-  static Future<ExportResult> export(
-    JellyfinSession session,
-    ReelEntry entry,
-  ) async {
+  static Future<ExportResult> export(StreamProxy proxy, ReelEntry entry) async {
     final item = entry.item;
     final fileName =
         '${_sanitize(item.displayTitle)}_${_stamp(entry.clipStart)}.mp4';
@@ -36,7 +32,7 @@ class ClipExporter {
     final outPath = '${outDir.path}/$fileName';
 
     final args = _ffmpegArgs(
-      input: JellyfinClient.streamUrl(session, item).toString(),
+      input: proxy.streamUrl(item).toString(),
       start: entry.clipStart,
       duration: entry.clipDuration,
       output: outPath,
@@ -72,6 +68,10 @@ class ClipExporter {
     final durSec = (duration.inMilliseconds / 1000).toStringAsFixed(3);
     return [
       '-y',
+      // The input is always our loopback proxy; refusing every other
+      // protocol keeps a malicious stream from pulling in local files.
+      '-protocol_whitelist',
+      'http,tcp',
       '-ss',
       startSec,
       '-i',
@@ -126,7 +126,12 @@ class ClipExporter {
 
   static Future<Directory> _outputDir() async {
     if (Platform.isAndroid) {
-      return getTemporaryDirectory();
+      // Only the most recent export needs to survive (the share target may
+      // still be reading it); older ones are removed so clips don't pile up.
+      final dir = Directory('${(await getTemporaryDirectory()).path}/shared');
+      if (await dir.exists()) await dir.delete(recursive: true);
+      await dir.create(recursive: true);
+      return dir;
     }
     var videos = '${Platform.environment['HOME']}/Videos';
     try {

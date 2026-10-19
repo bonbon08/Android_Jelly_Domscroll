@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import 'jellyfin_models.dart';
+import 'session_store.dart';
 
 class JellyfinAuthException implements Exception {
   final String message;
@@ -12,10 +14,9 @@ class JellyfinAuthException implements Exception {
   String toString() => message;
 }
 
-/// Minimal Jellyfin REST client: login, fetch unwatched movies/episodes,
-/// and build direct-stream URLs that support HTTP range seeking.
+/// Minimal Jellyfin REST client: login/logout and fetching unwatched
+/// movies/episodes. Video streams go through [StreamProxy].
 class JellyfinClient {
-  static final String _deviceId = const Uuid().v4();
   static const String _clientName = 'JellyReels';
   static const String _deviceName = 'JellyReels Client';
   static const String _clientVersion = '1.0.0';
@@ -31,11 +32,16 @@ class JellyfinClient {
     return url;
   }
 
-  static Map<String, String> _authHeader() => {
-    'X-Emby-Authorization':
-        'MediaBrowser Client="$_clientName", Device="$_deviceName", '
-        'DeviceId="$_deviceId", Version="$_clientVersion"',
-  };
+  // A stable device id makes Jellyfin replace this device's previous token
+  // on re-login instead of piling up still-valid tokens.
+  static Future<Map<String, String>> _authHeader() async {
+    final deviceId = await SessionStore.deviceId(() => const Uuid().v4());
+    return {
+      'X-Emby-Authorization':
+          'MediaBrowser Client="$_clientName", Device="$_deviceName", '
+          'DeviceId="$deviceId", Version="$_clientVersion"',
+    };
+  }
 
   /// Logs in against [serverUrlInput] and returns a session on success.
   static Future<JellyfinSession> login({
@@ -44,14 +50,18 @@ class JellyfinClient {
     required String password,
   }) async {
     final serverUrl = _normalizeServerUrl(serverUrlInput);
-    final uri = Uri.parse('$serverUrl/Users/AuthenticateByName');
+    final uri = Uri.tryParse('$serverUrl/Users/AuthenticateByName');
+    if (uri == null || uri.host.isEmpty) {
+      throw JellyfinAuthException('Ungültige Server-Adresse.');
+    }
 
+    final authHeader = await _authHeader();
     http.Response response;
     try {
       response = await http
           .post(
             uri,
-            headers: {..._authHeader(), 'Content-Type': 'application/json'},
+            headers: {...authHeader, 'Content-Type': 'application/json'},
             body: jsonEncode({'Username': username, 'Pw': password}),
           )
           .timeout(const Duration(seconds: 15));
@@ -135,15 +145,49 @@ class JellyfinClient {
         .toList();
   }
 
-  /// Direct-play stream URL. The underlying server supports HTTP range
-  /// requests on this endpoint, so the player can seek freely within it.
-  static Uri streamUrl(JellyfinSession session, JellyfinItem item) {
-    return Uri.parse('${session.serverUrl}/Videos/${item.id}/stream').replace(
-      queryParameters: {
-        'Static': 'true',
-        if (item.mediaSourceId != null) 'MediaSourceId': item.mediaSourceId,
-        'api_key': session.accessToken,
-      },
-    );
+  /// Revokes the token on the server; clearing it locally alone would leave
+  /// it valid for anyone who copied it.
+  static Future<void> logout(JellyfinSession session) async {
+    try {
+      await http
+          .post(
+            Uri.parse('${session.serverUrl}/Sessions/Logout'),
+            headers: session.authHeaders,
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Offline: the local session is still cleared by the caller.
+    }
+  }
+
+  /// True when [serverUrlInput] would send the password and token
+  /// unencrypted to a host outside the local network.
+  static bool isInsecureRemote(String serverUrlInput) {
+    final uri = Uri.tryParse(_normalizeServerUrl(serverUrlInput));
+    if (uri == null || uri.scheme != 'http') return false;
+    return !_isLocalHost(uri.host);
+  }
+
+  static bool _isLocalHost(String host) {
+    final h = host.toLowerCase();
+    if (h == 'localhost' ||
+        h.endsWith('.local') ||
+        h.endsWith('.lan') ||
+        h.endsWith('.home.arpa') ||
+        !h.contains('.') && !h.contains(':')) {
+      return true;
+    }
+    final ip = InternetAddress.tryParse(h);
+    if (ip == null) return false;
+    if (ip.isLoopback || ip.isLinkLocal) return true;
+    final b = ip.rawAddress;
+    if (ip.type == InternetAddressType.IPv4) {
+      return b[0] == 10 ||
+          (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+          (b[0] == 192 && b[1] == 168) ||
+          // CGNAT range, used by Tailscale whose tunnel is encrypted.
+          (b[0] == 100 && b[1] >= 64 && b[1] <= 127);
+    }
+    return (b[0] & 0xfe) == 0xfc;
   }
 }

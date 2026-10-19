@@ -11,14 +11,12 @@ import 'feed_controller.dart';
 /// One page of the feed. Only the active page shows the shared
 /// [ClipPlayer]'s video; the others are just a black frame with the title.
 class ReelPlayerView extends StatefulWidget {
-  final JellyfinSession session;
   final ReelEntry entry;
   final bool isActive;
   final ClipPlayer clipPlayer;
 
   const ReelPlayerView({
     super.key,
-    required this.session,
     required this.entry,
     required this.isActive,
     required this.clipPlayer,
@@ -38,7 +36,10 @@ class _ReelPlayerViewState extends State<ReelPlayerView> {
       const SnackBar(content: Text('Clip wird erstellt …')),
     );
     try {
-      final result = await ClipExporter.export(widget.session, widget.entry);
+      final result = await ClipExporter.export(
+        await widget.clipPlayer.proxy,
+        widget.entry,
+      );
       messenger.hideCurrentSnackBar();
       final folder = result.savedFolder;
       messenger.showSnackBar(
